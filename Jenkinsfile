@@ -15,6 +15,19 @@ pipeline {
             }
         }
 
+        stage('Set Image Tag') {
+            steps {
+                script {
+                    env.IMAGE_TAG = sh(
+                        script: 'git rev-parse --short=7 HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Image tag: ${env.IMAGE_TAG}"
+                }
+            }
+        }
+
         stage('Test') {
             steps {
                 sh '''
@@ -24,9 +37,7 @@ pipeline {
                         echo "Testing $service"
 
                         cd services/$service
-
                         python3 -m py_compile app.py
-
                         cd ../..
                     done
                 '''
@@ -39,15 +50,15 @@ pipeline {
                     set -e
 
                     docker build \
-                      -t frontend:1.1.0 \
+                      -t frontend:$IMAGE_TAG \
                       services/frontend
 
                     docker build \
-                      -t product-service:1.0.0 \
+                      -t product-service:$IMAGE_TAG \
                       services/product-service
 
                     docker build \
-                      -t order-service:1.0.0 \
+                      -t order-service:$IMAGE_TAG \
                       services/order-service
                 '''
             }
@@ -67,14 +78,14 @@ pipeline {
         stage('Tag Images') {
             steps {
                 sh '''
-                    docker tag frontend:1.1.0 \
-                      "$ECR_REGISTRY/frontend:1.1.0"
+                    docker tag frontend:$IMAGE_TAG \
+                      "$ECR_REGISTRY/frontend:$IMAGE_TAG"
 
-                    docker tag product-service:1.0.0 \
-                      "$ECR_REGISTRY/product-service:1.0.0"
+                    docker tag product-service:$IMAGE_TAG \
+                      "$ECR_REGISTRY/product-service:$IMAGE_TAG"
 
-                    docker tag order-service:1.0.0 \
-                      "$ECR_REGISTRY/order-service:1.0.0"
+                    docker tag order-service:$IMAGE_TAG \
+                      "$ECR_REGISTRY/order-service:$IMAGE_TAG"
                 '''
             }
         }
@@ -84,9 +95,9 @@ pipeline {
                 sh '''
                     set -e
 
-                    docker push "$ECR_REGISTRY/frontend:1.1.0"
-                    docker push "$ECR_REGISTRY/product-service:1.0.0"
-                    docker push "$ECR_REGISTRY/order-service:1.0.0"
+                    docker push "$ECR_REGISTRY/frontend:$IMAGE_TAG"
+                    docker push "$ECR_REGISTRY/product-service:$IMAGE_TAG"
+                    docker push "$ECR_REGISTRY/order-service:$IMAGE_TAG"
                 '''
             }
         }
@@ -94,7 +105,7 @@ pipeline {
 
     post {
         success {
-            echo 'CI/CD image build and ECR push completed successfully.'
+            echo "Images successfully pushed to ECR with tag: ${env.IMAGE_TAG}"
         }
 
         failure {
